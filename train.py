@@ -543,12 +543,14 @@ step = 0
 while True:
     torch.cuda.synchronize()
     t0 = time.time()
+    accumulated_loss = torch.tensor(0.0, device=device)
     for micro_step in range(grad_accum_steps):
         with autocast_ctx:
             loss = model(x, y)
         train_loss = loss.detach()
         loss = loss / grad_accum_steps
         loss.backward()
+        accumulated_loss += train_loss / grad_accum_steps
         x, y, epoch = next(train_loader)
 
     # Progress and schedules
@@ -564,7 +566,7 @@ while True:
     optimizer.step()
     model.zero_grad(set_to_none=True)
 
-    train_loss_f = train_loss.item()
+    train_loss_f = accumulated_loss.item()
 
     # Fast fail: abort if loss is exploding or NaN
     if math.isnan(train_loss_f) or train_loss_f > 100:
